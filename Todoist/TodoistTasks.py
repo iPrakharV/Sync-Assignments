@@ -2,7 +2,7 @@ import os
 import datetime
 import json
 from todoist_api_python.api import TodoistAPI
-from Constants import PROJECT_NAME, SECTION_NAME
+from Constants import PROJECT_NAME, SECTION_NAME, ASSIGNEE_ID
 
 class TodoistTasks:
     def __init__(self, tasks, log_file_path='todoist_tasks_log.json'):
@@ -13,6 +13,27 @@ class TodoistTasks:
         self.log_file_path = os.path.join(self.path, log_file_path)
         self.project_id = None
         self.section_id = None
+
+    def list_collaborators(self, project_id):
+        """List all collaborators in a project to find assignee IDs"""
+        try:
+            collaborators_paginator = self.api.get_collaborators(project_id=project_id)
+            collaborators = list(collaborators_paginator)
+            
+            # Handle nested list return
+            if len(collaborators) == 1 and isinstance(collaborators[0], list):
+                collaborators = collaborators[0]
+
+            print(f"Collaborators in project {project_id}:")
+            for user in collaborators:
+                name = getattr(user, 'name', 'N/A')
+                id = getattr(user, 'id', 'N/A')
+                email = getattr(user, 'email', 'N/A')
+                print(f"  - Name: {name}, ID: {id}, Email: {email}")
+            return collaborators
+        except Exception as e:
+            print(f"Error fetching collaborators: {e}")
+            return []
 
     def get_api_token(self):
         try:
@@ -183,7 +204,8 @@ class TodoistTasks:
                     labels=[course_name],
                     priority=2,
                     project_id=self.project_id,
-                    section_id=self.section_id
+                    section_id=self.section_id,
+                    assignee_id=ASSIGNEE_ID
                 )
                 print(f"Task added to Todoist in {PROJECT_NAME} project under {SECTION_NAME} section: {task.content}")
 
