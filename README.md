@@ -64,6 +64,24 @@ python3 Main.py
 ```
 Authenticate with Google on first run and follow prompts to sync assignments.
 
+### Automation (macOS)
+
+To run the sync automatically every day at 9:00 AM:
+
+1. Make the sync script executable:
+    ```bash
+    chmod +x sync_assignments.sh
+    ```
+2. Copy the launch agent to your LaunchAgents directory:
+    ```bash
+    cp com.user.syncassignments.plist ~/Library/LaunchAgents/
+    ```
+3. Load the launch agent:
+    ```bash
+    launchctl load ~/Library/LaunchAgents/com.user.syncassignments.plist
+    ```
+You will now receive a macOS notification every morning when the sync completes.
+
 ## 🛠️ How It Works
 
 - **GmailReader**: Scans Gmail for Brightspace assignment emails, extracting key information.
