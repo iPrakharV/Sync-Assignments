@@ -200,10 +200,14 @@ class TodoistTasks:
 
         if task_name not in task_log_names:
             try:
+                labels = [course_name]
+                if BASE_LABEL:
+                    labels.append(BASE_LABEL)
+
                 task = self.api.add_task(
                     content=task_name,
                     due_date=due_date,  # Pass datetime object, not string
-                    labels=[BASE_LABEL, course_name],
+                    labels=labels,
                     priority=priority,
                     project_id=self.project_id,
                     section_id=self.section_id,

@@ -104,8 +104,8 @@ class GmailReader:
                 lines[i] = lines[i].replace("FW: ", "")
                 parts = lines[i].split(' ')
                 if courseName == "" and "Activity summary for" in lines[i]:
-                    parts = parts[5:]
-                    courseName = "".join(parts[1:3])
+                    # Extract everything after the prefix up to the first hyphen or end of line
+                    courseName = lines[i].split("Activity summary for ")[1].split(" -")[0].strip()
                 elif "- Due date is in" in lines[i] and courseName != "":
                     taskName = task_name_pattern.search(lines[i]).group(1).strip()
                     clean_time_string = lines[i + 1].lstrip(": ").strip().replace("Due date: ", "")  # Strip whitespace from both ends
