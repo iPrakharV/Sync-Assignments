@@ -8,11 +8,12 @@
 
 - **Brightspace Integration**: Specifically tuned for Purdue University students, focusing on assignment emails from Brightspace.
 - **Email Parsing**: Automatically parses assignment details from Gmail, reducing manual entry.
-- **Calendar Sync**: Creates Google Calendar events for each assignment with due dates and reminders.
-- **Task Sync**: Adds assignments to Google Tasks with comprehensive details.
-- **Todoist Integration**: Seamlessly integrates with Todoist, allowing for efficient task management alongside Google Tasks.
-- **Duplication Avoidance**: Intelligent checks to prevent duplicate calendar events and tasks.
-- **Log Management**: Maintains a detailed log of synced assignments, ensuring transparency and control.
+- **One-Click Links**: Extracts specific assignment URLs directly into Todoist tasks for immediate access.
+- **Smart Priority**: Automatically sets task priority (P1-P4) based on proximity to the due date.
+- **Course-Specific Labels**: Automatically tags tasks with their specific course codes (e.g., `@BUS 20201`).
+- **Calendar & Task Sync**: Creates Google Calendar events and adds tasks to Google Tasks with comprehensive details.
+- **Todoist Integration**: Seamlessly integrates with Todoist, allowing for efficient task management with assignee support.
+- **Duplication Avoidance**: Intelligent checks to prevent duplicate entries across platforms.
 - **Automated Cleanup**: Removes past-due assignments from logs to keep your list current.
 
 ## 🔧 Languages and Tools Used
@@ -54,15 +55,20 @@
     ```bash
     cp .env.example .env
     ```
-3. Edit `.env` to include your email and Todoist preferences.
+3. Edit `.env` to include your preferences:
+    - `SYNC_EMAIL`: The email address receiving Brightspace notifications.
+    - `TODOIST_PROJECT_NAME`: Your target project name (e.g., "College").
+    - `TODOIST_SECTION_NAME`: The specific section in that project.
+    - `TODOIST_ASSIGNEE_ID`: (Optional) Your internal Todoist ID for automatic assignment.
+    - `TODOIST_BASE_LABEL`: (Optional) A generic label like "Academic" for all tasks.
 
 ### Usage
-
+ 
 Run the Sync Assignments tool:
 ```bash
 python3 Main.py
 ```
-Authenticate with Google on first run and follow prompts to sync assignments.
+Authentication: On the first run, the tool will open a browser window for Google authentication. It will then generate local token files for future automated runs.
 
 ### Automation (macOS)
 
