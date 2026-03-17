@@ -46,8 +46,8 @@ class GmailReader:
             print("You must authenticate before filtering messages.")
             return
 
-        today = datetime.datetime.now().strftime('%Y/%m/%d')
-        query = f'from:{sender_email} after:{today}'
+        yesterday = (datetime.datetime.now() - datetime.timedelta(days=1)).strftime('%Y/%m/%d')
+        query = f'from:{sender_email} after:{yesterday}'
 
         results = self.service.users().messages().list(userId='me', q=query).execute()
         messages = results.get('messages', [])
@@ -67,18 +67,26 @@ class GmailReader:
             return
 
         message = self.service.users().messages().get(userId='me', id=message_id, format='full').execute()
-
+        
         if 'parts' in message['payload']:
             for part in message['payload']['parts']:
-                if part['mimeType'] == 'text/plain' or part['mimeType'] == 'text/html':
-                    data = part['body']['data']
-                    text = base64.urlsafe_b64decode(data.encode('ASCII')).decode('utf-8')
-                    return text
+                # Sometimes parts have parts
+                if 'parts' in part:
+                    for subpart in part['parts']:
+                        if subpart.get('mimeType') in ['text/plain', 'text/html']:
+                            data = subpart['body'].get('data')
+                            if data:
+                                return base64.urlsafe_b64decode(data.encode('ASCII')).decode('utf-8')
+                
+                if part.get('mimeType') in ['text/plain', 'text/html']:
+                    data = part['body'].get('data')
+                    if data:
+                        return base64.urlsafe_b64decode(data.encode('ASCII')).decode('utf-8')
         else:
             # For simple email bodies (non-multipart)
-            data = message['payload']['body']['data']
-            text = base64.urlsafe_b64decode(data.encode('ASCII')).decode('utf-8')
-            return text
+            data = message['payload']['body'].get('data')
+            if data:
+                return base64.urlsafe_b64decode(data.encode('ASCII')).decode('utf-8')
 
         return "No readable message body found."
     

@@ -50,6 +50,11 @@
 ### Setup
 
 1. Place your `client_secret.json` in the root directory.
+2. Copy `.env.example` to `.env` and fill in your details:
+    ```bash
+    cp .env.example .env
+    ```
+3. Edit `.env` to include your email and Todoist preferences.
 
 ### Usage
 
