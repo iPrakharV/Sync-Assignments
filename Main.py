@@ -14,13 +14,20 @@ if __name__ == '__main__':
 
     # print("Tasks: ", reader.tasks)
 
+    all_synced_tasks = []
+
     if GCAL_SYNC:
         calendar_tasks = GCalendarTasks(reader.tasks)
         calendar_tasks.authenticate()
-        calendar_tasks.sync_tasks()
+        all_synced_tasks.extend(calendar_tasks.sync_tasks())
         print("Tasks synced to Google Calendar!")
 
     if TODOIST_SYNC:
         todoist_tasks = TodoistTasks(reader.tasks)
-        todoist_tasks.sync_tasks()
+        all_synced_tasks.extend(todoist_tasks.sync_tasks())
         print("Tasks synced to Todoist!")
+
+    if all_synced_tasks:
+        print(f"SYNCED_TASKS_DATA: {', '.join(all_synced_tasks)}")
+    else:
+        print("SYNCED_TASKS_DATA: None")

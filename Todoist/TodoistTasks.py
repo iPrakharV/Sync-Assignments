@@ -198,8 +198,10 @@ class TodoistTasks:
                 print(f"An error occurred while adding the task: {e}")
                 import traceback
                 traceback.print_exc()
+            return True
         else:
             print(f"Task '{task_name}' already exists in Todoist. No new task created.")
+            return False
 
     def clean_task_log(self):
         tasks_log = self.read_task_log()
@@ -212,13 +214,16 @@ class TodoistTasks:
 
     def sync_tasks(self):
         self.clean_task_log()
+        added_tasks = []
         for task_name, (course_name, due_datetime) in self.tasks.items():
             # Handle both string and datetime objects
             if isinstance(due_datetime, datetime.datetime):
                 due_date_string = due_datetime.strftime('%Y-%m-%dT%H:%M:%S')
             else:
                 due_date_string = due_datetime
-            self.add_task(task_name, course_name, due_date_string)
+            if self.add_task(task_name, course_name, due_date_string):
+                added_tasks.append(task_name)
+        return added_tasks
 
 if __name__ == '__main__':
     tasks = {

@@ -80,8 +80,10 @@ class GCalendarTasks:
                 'due_date': due_rfc3339
             })
             self.write_task_log(tasks_log)
+            return True
         else:
             print(f"Task '{task_name}' already exists. No new task created.")
+            return False
 
 
 
@@ -90,10 +92,12 @@ class GCalendarTasks:
         tasks_log = [task for task in tasks_log if datetime.datetime.strptime(task['due_date'], '%Y-%m-%dT%H:%M:%SZ') >= datetime.datetime.utcnow()]
         self.write_task_log(tasks_log)
         
+        added_tasks = []
         for task_name, (course_name, due_datetime) in self.tasks.items():
             full_task_name = f"{task_name} - {course_name}"
-            self.create_google_task(full_task_name, due_datetime) 
-
+            if self.create_google_task(full_task_name, due_datetime):
+                added_tasks.append(full_task_name)
+        return added_tasks
 
 if __name__ == '__main__':
     tasks = {
