@@ -188,6 +188,8 @@ class TodoistTasks:
             print(f"Skipping '{task_name}' as its due date is in the past.")
             return
 
+        priority = self.get_priority(due_date)
+
         if self.project_id is None:
             self.project_id = self.get_project_id(PROJECT_NAME)
         if self.section_id is None:
@@ -202,7 +204,7 @@ class TodoistTasks:
                     content=task_name,
                     due_date=due_date,  # Pass datetime object, not string
                     labels=[course_name],
-                    priority=2,
+                    priority=priority,
                     project_id=self.project_id,
                     section_id=self.section_id,
                     assignee_id=ASSIGNEE_ID
@@ -224,6 +226,18 @@ class TodoistTasks:
         else:
             print(f"Task '{task_name}' already exists in Todoist. No new task created.")
             return False
+
+    def get_priority(self, due_date):
+        """Calculate priority based on due date proximity"""
+        time_diff = due_date - datetime.datetime.now()
+        if time_diff < datetime.timedelta(days=1):
+            return 4  # P1 (Urgent)
+        elif time_diff < datetime.timedelta(days=3):
+            return 3  # P2 (High)
+        elif time_diff < datetime.timedelta(days=7):
+            return 2  # P3 (Medium)
+        else:
+            return 1  # P4 (Normal)
 
     def clean_task_log(self):
         tasks_log = self.read_task_log()
