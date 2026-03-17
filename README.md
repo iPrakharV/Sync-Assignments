@@ -76,11 +76,11 @@ To run the sync automatically every day at 9:00 AM:
 
 1. Make the sync script executable:
     ```bash
-    chmod +x sync_assignments.sh
+    chmod +x automation/sync_assignments.sh
     ```
 2. Copy the launch agent to your LaunchAgents directory:
     ```bash
-    cp com.user.syncassignments.plist ~/Library/LaunchAgents/
+    cp automation/com.user.syncassignments.plist ~/Library/LaunchAgents/
     ```
 3. Load the launch agent:
     ```bash
@@ -90,9 +90,9 @@ You will now receive a macOS notification every morning when the sync completes.
 
 ## 🛠️ How It Works
 
-- **GmailReader**: Scans Gmail for Brightspace assignment emails, extracting key information.
-- **GCalendarTasks & TodoistTasks**: Syncs the extracted assignment information with Google Calendar, Google Tasks, and Todoist, ensuring your academic schedule is always up-to-date across your preferred task management platforms.
-- **Main**: Orchestrates the flow from email parsing to calendar and task synchronization with both Google and Todoist services.
+- **GmailReader** (in `core/Google`): Scans Gmail for Brightspace assignment emails, extracting key information.
+- **GCalendarTasks & TodoistTasks** (in `core/`): Syncs the extracted assignment information with Google Calendar, Google Tasks, and Todoist.
+- **Main**: Orchestrates the flow from core logic to synchronization services.
 
 ## 📄 License
 

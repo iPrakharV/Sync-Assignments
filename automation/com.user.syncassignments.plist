@@ -7,7 +7,7 @@
     <key>ProgramArguments</key>
     <array>
         <string>/bin/bash</string>
-        <string>/Users/iprakharv/Developer/Sync-Assignments/sync_assignments.sh</string>
+        <string>/Users/iprakharv/Developer/Sync-Assignments/automation/sync_assignments.sh</string>
     </array>
     <key>StartCalendarInterval</key>
     <dict>

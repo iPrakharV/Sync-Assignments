@@ -1,7 +1,7 @@
-from Google.GmailReader import GmailReader
-from Google.GCalendarTasks import GCalendarTasks
-from Todoist.TodoistTasks import TodoistTasks
-from Constants import EMAIL, GCAL_SYNC, TODOIST_SYNC
+from core.Google.GmailReader import GmailReader
+from core.Google.GCalendarTasks import GCalendarTasks
+from core.Todoist.TodoistTasks import TodoistTasks
+from core.Constants import EMAIL, GCAL_SYNC, TODOIST_SYNC
 
 
 

@@ -2,7 +2,7 @@ import os
 import datetime
 import json
 from todoist_api_python.api import TodoistAPI
-from Constants import PROJECT_NAME, SECTION_NAME, ASSIGNEE_ID, BASE_LABEL
+from core.Constants import PROJECT_NAME, SECTION_NAME, ASSIGNEE_ID, BASE_LABEL
 
 class TodoistTasks:
     def __init__(self, tasks, log_file_path='todoist_tasks_log.json'):
