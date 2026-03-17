@@ -113,7 +113,12 @@ class GmailReader:
                         dueDate = datetime.datetime.strptime(clean_time_string[:-4].strip(), "%A, %B %d, %Y %I:%M %p")
                     except ValueError as e:
                         print("Error parsing date:", e, "from string:", repr(clean_time_string))
-                    self.tasks[taskName] = (courseName, dueDate)
+                    
+                    # Extract URL - typically looks like https://*.brightspace.com/d2l/le/content/...
+                    url_match = re.search(r'https://[^\s<>"]+', email_body)
+                    assignment_url = url_match.group(0) if url_match else ""
+                    
+                    self.tasks[taskName] = (courseName, dueDate, assignment_url)
 
 
 # Usage example:

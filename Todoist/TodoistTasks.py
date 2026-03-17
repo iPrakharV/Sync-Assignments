@@ -175,7 +175,7 @@ class TodoistTasks:
         
         print("=== END DEBUG ===\n")
 
-    def add_task(self, task_name, course_name, due_datetime):
+    def add_task(self, task_name, course_name, due_datetime, assignment_url=""):
         # Handle both string and datetime objects
         if isinstance(due_datetime, str):
             due_date = datetime.datetime.strptime(due_datetime, '%Y-%m-%dT%H:%M:%S')
@@ -204,9 +204,14 @@ class TodoistTasks:
                 if BASE_LABEL:
                     labels.append(BASE_LABEL)
 
+                description = ""
+                if assignment_url:
+                    description = f"🔗 [View Assignment]({assignment_url})"
+
                 task = self.api.add_task(
                     content=task_name,
                     due_date=due_date,  # Pass datetime object, not string
+                    description=description,
                     labels=labels,
                     priority=priority,
                     project_id=self.project_id,
@@ -255,13 +260,17 @@ class TodoistTasks:
     def sync_tasks(self):
         self.clean_task_log()
         added_tasks = []
-        for task_name, (course_name, due_datetime) in self.tasks.items():
+        for task_name, task_info in self.tasks.items():
+            course_name = task_info[0]
+            due_datetime = task_info[1]
+            assignment_url = task_info[2] if len(task_info) > 2 else ""
+            
             # Handle both string and datetime objects
             if isinstance(due_datetime, datetime.datetime):
                 due_date_string = due_datetime.strftime('%Y-%m-%dT%H:%M:%S')
             else:
                 due_date_string = due_datetime
-            if self.add_task(task_name, course_name, due_date_string):
+            if self.add_task(task_name, course_name, due_date_string, assignment_url):
                 added_tasks.append(task_name)
         return added_tasks
 

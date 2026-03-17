@@ -93,7 +93,9 @@ class GCalendarTasks:
         self.write_task_log(tasks_log)
         
         added_tasks = []
-        for task_name, (course_name, due_datetime) in self.tasks.items():
+        for task_name, task_info in self.tasks.items():
+            course_name = task_info[0]
+            due_datetime = task_info[1]
             full_task_name = f"{task_name} - {course_name}"
             if self.create_google_task(full_task_name, due_datetime):
                 added_tasks.append(full_task_name)
