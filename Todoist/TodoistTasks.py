@@ -2,7 +2,7 @@ import os
 import datetime
 import json
 from todoist_api_python.api import TodoistAPI
-from Constants import PROJECT_NAME, SECTION_NAME, ASSIGNEE_ID
+from Constants import PROJECT_NAME, SECTION_NAME, ASSIGNEE_ID, BASE_LABEL
 
 class TodoistTasks:
     def __init__(self, tasks, log_file_path='todoist_tasks_log.json'):
@@ -203,7 +203,7 @@ class TodoistTasks:
                 task = self.api.add_task(
                     content=task_name,
                     due_date=due_date,  # Pass datetime object, not string
-                    labels=[course_name],
+                    labels=[BASE_LABEL, course_name],
                     priority=priority,
                     project_id=self.project_id,
                     section_id=self.section_id,
