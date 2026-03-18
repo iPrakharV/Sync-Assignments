@@ -72,7 +72,7 @@ Authentication: On the first run, the tool will open a browser window for Google
 
 ### Automation (macOS)
 
-To run the sync automatically every day at 9:00 AM:
+To run the sync automatically every day the first time you open your Mac after 6:00 AM:
 
 1. Make the sync script executable:
     ```bash
