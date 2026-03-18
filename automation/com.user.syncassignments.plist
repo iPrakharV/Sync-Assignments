@@ -9,10 +9,12 @@
         <string>/bin/bash</string>
         <string>/Users/iprakharv/Developer/Sync-Assignments/automation/sync_assignments.sh</string>
     </array>
+    <key>RunAtLoad</key>
+    <true/>
     <key>StartCalendarInterval</key>
     <dict>
         <key>Hour</key>
-        <integer>9</integer>
+        <integer>6</integer>
         <key>Minute</key>
         <integer>0</integer>
     </dict>
