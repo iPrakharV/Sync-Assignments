@@ -161,3 +161,8 @@ cython_debug/
 
 *.cfg
 *.json
+!config.example.json
+
+# Sync Assignments runtime output
+logs/
+.DS_Store

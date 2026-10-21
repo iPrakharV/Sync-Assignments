@@ -1,232 +1,221 @@
+from __future__ import annotations
+
 import os
-import datetime
 import json
+import logging
+import datetime
+import requests
 from todoist_api_python.api import TodoistAPI
-from Constants import PROJECT_NAME, SECTION_NAME
+
+from Summary import SyncReport
+
+log = logging.getLogger(__name__)
+
+COURSE_COLORS = ['blue', 'green', 'violet', 'teal', 'magenta', 'lime_green', 'grape', 'salmon', 'mint_green', 'lavender']
+KIND_COLORS = {'exam': 'red', 'quiz': 'orange', 'assignment': 'sky_blue'}
+KEEP_CLOSED_FOR = datetime.timedelta(days=14)
+DUE_SOON = datetime.timedelta(hours=48)
+
+
+def flatten(paginator):
+    return [item for page in paginator for item in page]
+
 
 class TodoistTasks:
-    def __init__(self, tasks, log_file_path='todoist_tasks_log.json'):
-        self.tasks = tasks
+    def __init__(self, settings, dry_run=False, state_file='todoist_state.json'):
+        self.settings = settings
+        self.dry_run = dry_run
         self.path = os.path.dirname(os.path.abspath(__file__))
-        self.api_token = self.get_api_token()
-        self.api = TodoistAPI(self.api_token)
-        self.log_file_path = os.path.join(self.path, log_file_path)
+        self.state_path = os.path.join(self.path, state_file)
+        self.api = TodoistAPI(self.get_api_token())
         self.project_id = None
         self.section_id = None
+        self.open_tasks = {}  # task_id -> Task, open tasks in the target project/section
+        self.created_ids = set()
 
     def get_api_token(self):
-        try:
-            with open(os.path.join(self.path, 'Token.json'), 'r') as file:
-                data = json.load(file)
-                return data['API_Token']
-        except Exception as e:
-            print(f"An error occurred while fetching API token: {e}")
+        with open(os.path.join(self.path, 'Token.json'), 'r') as file:
+            return json.load(file)['API_Token']
 
-    def list_all_projects(self):
-        """Debug method to list all available projects"""
-        try:
-            projects_paginator = self.api.get_projects()
-            projects_data = list(projects_paginator)  # Convert paginator to list
-            
-            # Handle case where paginator returns a list containing a list of projects
-            if len(projects_data) == 1 and isinstance(projects_data[0], list):
-                projects = projects_data[0]
-            else:
-                projects = projects_data
-                
-            print(f"Found {len(projects)} projects:")
-            for i, project in enumerate(projects):
-                print(f"  Project {i}:")
-                if hasattr(project, 'name'):
-                    print(f"    - Name: '{project.name}', ID: {project.id}")
-                elif isinstance(project, dict):
-                    print(f"    - Name: '{project.get('name')}', ID: {project.get('id')}")
-                else:
-                    print(f"    - Raw project object: {project}")
-            return projects
-        except Exception as e:
-            print(f"Error fetching projects: {e}")
-            import traceback
-            traceback.print_exc()
-            return []
+    # ---- state: {assignment key: {task_id, name, course, due, closed}} ----
 
-    def list_all_sections(self, project_id):
-        """Debug method to list all sections in a project"""
-        try:
-            sections_paginator = self.api.get_sections(project_id=project_id)
-            sections_data = list(sections_paginator)  # Convert paginator to list
-            
-            # Handle case where paginator returns a list containing a list of sections
-            if len(sections_data) == 1 and isinstance(sections_data[0], list):
-                sections = sections_data[0]
-            else:
-                sections = sections_data
-                
-            print(f"Found {len(sections)} sections in project ID {project_id}:")
-            for i, section in enumerate(sections):
-                print(f"  Section {i}:")
-                if hasattr(section, 'name'):
-                    print(f"    - Name: '{section.name}', ID: {section.id}")
-                elif isinstance(section, dict):
-                    print(f"    - Name: '{section.get('name')}', ID: {section.get('id')}")
-                else:
-                    print(f"    - Raw section object: {section}")
-            return sections
-        except Exception as e:
-            print(f"Error fetching sections: {e}")
-            import traceback
-            traceback.print_exc()
-            return []
+    def read_state(self):
+        if not os.path.exists(self.state_path):
+            return {}
+        with open(self.state_path, 'r') as f:
+            return json.load(f).get('tasks', {})
 
-    def get_project_id(self, project_name):
-        try:
-            projects_paginator = self.api.get_projects()
-            projects_data = list(projects_paginator)  # Convert paginator to list
-            
-            # Handle case where paginator returns a list containing a list of projects
-            if len(projects_data) == 1 and isinstance(projects_data[0], list):
-                projects = projects_data[0]
+    def write_state(self, state):
+        if self.dry_run:
+            return
+        with open(self.state_path, 'w') as f:
+            json.dump({'version': 2, 'tasks': state}, f, indent=2)
+
+    # ---- Todoist lookups ----
+
+    def resolve_destination(self):
+        project_name, section_name = self.settings['project'], self.settings.get('section')
+        project = next((p for p in flatten(self.api.get_projects()) if p.name == project_name), None)
+        if not project:
+            raise RuntimeError(f"Todoist project '{project_name}' not found.")
+        self.project_id = project.id
+        if section_name:
+            section = next((s for s in flatten(self.api.get_sections(project_id=project.id))
+                            if s.name == section_name), None)
+            if not section:
+                raise RuntimeError(f"Section '{section_name}' not found in project '{project_name}'.")
+            self.section_id = section.id
+
+        tasks = flatten(self.api.get_tasks(project_id=self.project_id, section_id=self.section_id))
+        self.open_tasks = {task.id: task for task in tasks}
+
+    def labels_for(self, assignment):
+        course_label = self.settings['course_labels'].get(
+            assignment.course_code, assignment.course_code.replace(' ', ''))
+        labels = [course_label]
+        if self.settings.get('type_labels'):
+            labels.append(assignment.kind)
+        return labels
+
+    def ensure_labels(self, assignments):
+        wanted = {label for assignment in assignments for label in self.labels_for(assignment)}
+        existing = {label.name for label in flatten(self.api.get_labels())}
+        colors = self.settings.get('label_colors', {})
+        course_labels = sorted(set(self.settings['course_labels'].values()))
+        for name in sorted(wanted - existing):
+            if name in colors:
+                color = colors[name]
+            elif name in KIND_COLORS:
+                color = KIND_COLORS[name]
+            elif name in course_labels:
+                color = COURSE_COLORS[course_labels.index(name) % len(COURSE_COLORS)]
             else:
-                projects = projects_data
-            
-            for project in projects:
-                if hasattr(project, 'name') and project.name == project_name:
-                    return project.id
-                elif isinstance(project, dict) and project.get('name') == project_name:
-                    return project.get('id')
-        except Exception as e:
-            print(f"An error occurred while fetching projects: {e}")
+                color = 'charcoal'
+            log.info("%s label '%s' (%s)", "Would create" if self.dry_run else "Creating", name, color)
+            if not self.dry_run:
+                self.api.add_label(name=name, color=color)
+
+    def find_existing(self, assignment):
+        """Adopt a matching open task (e.g. if the state file was lost) instead of creating a duplicate."""
+        course_label = self.labels_for(assignment)[0]
+        for task in self.open_tasks.values():
+            if task.content == assignment.name and course_label in (task.labels or []):
+                return task
         return None
 
-    def get_section_id(self, project_id, section_name):
+    def get_task(self, task_id):
+        """Returns the task, or None if it was deleted."""
+        if task_id in self.open_tasks:
+            return self.open_tasks[task_id]
         try:
-            sections_paginator = self.api.get_sections(project_id=project_id)
-            sections_data = list(sections_paginator)  # Convert paginator to list
-            
-            # Handle case where paginator returns a list containing a list of sections
-            if len(sections_data) == 1 and isinstance(sections_data[0], list):
-                sections = sections_data[0]
-            else:
-                sections = sections_data
-            
-            for section in sections:
-                if hasattr(section, 'name') and section.name == section_name:
-                    return section.id
-                elif isinstance(section, dict) and section.get('name') == section_name:
-                    return section.get('id')
-        except Exception as e:
-            print(f"An error occurred while fetching sections: {e}")
-        return None
+            return self.api.get_task(task_id)
+        except requests.HTTPError as e:
+            if e.response is not None and e.response.status_code == 404:
+                return None
+            raise
 
-    def read_task_log(self):
-        if not os.path.exists(self.log_file_path):
-            return []
-        
-        with open(self.log_file_path, 'r') as log_file:
-            return json.load(log_file)
+    # ---- sync ----
 
-    def write_task_log(self, tasks_log):
-        with open(self.log_file_path, 'w') as log_file:
-            json.dump(tasks_log, log_file)
+    def create(self, assignment):
+        if self.dry_run:
+            self.created_ids.add('dry-run')
+            return 'dry-run'
+        task = self.api.add_task(
+            content=assignment.name,
+            description=assignment.description(),
+            labels=self.labels_for(assignment),
+            priority=self.settings.get('priority', 2),
+            project_id=self.project_id,
+            section_id=self.section_id,
+            due_datetime=assignment.due,
+        )
+        self.created_ids.add(task.id)
+        return task.id
 
-    def debug_sync_setup(self):
-        """Debug method to check project and section setup"""
-        print("=== DEBUGGING TODOIST SETUP ===")
-        
-        # List all projects
-        projects = self.list_all_projects()
-        
-        # Try to find our target project
-        self.project_id = self.get_project_id(PROJECT_NAME)
-        print(f"\nLooking for project: '{PROJECT_NAME}'")
-        print(f"Found project ID: {self.project_id}")
-        
-        if self.project_id:
-            # List sections in our project
-            self.list_all_sections(self.project_id)
-            
-            # Try to find our target section
-            self.section_id = self.get_section_id(self.project_id, SECTION_NAME)
-            print(f"\nLooking for section: '{SECTION_NAME}'")
-            print(f"Found section ID: {self.section_id}")
-        else:
-            print(f"ERROR: Project '{PROJECT_NAME}' not found!")
-        
-        print("=== END DEBUG ===\n")
+    def update(self, task, assignment):
+        if self.dry_run:
+            return
+        labels = list(dict.fromkeys((task.labels or []) + self.labels_for(assignment)))
+        self.api.update_task(task.id, due_datetime=assignment.due,
+                             description=assignment.description(), labels=labels)
 
-    def add_task(self, task_name, course_name, due_datetime):
-        # Handle both string and datetime objects
-        if isinstance(due_datetime, str):
-            due_date = datetime.datetime.strptime(due_datetime, '%Y-%m-%dT%H:%M:%S')
-            due_date_string = due_datetime
-        else:
-            due_date = due_datetime
-            due_date_string = due_datetime.strftime('%Y-%m-%dT%H:%M:%S')
-        
-        if due_date <= datetime.datetime.now():
-            print(f"Skipping '{task_name}' as its due date is in the past.")
+    def sync_one(self, assignment, state, report, now):
+        entry = state.get(assignment.key)
+        label = f"{assignment.name} [{assignment.course_code}]"
+
+        if entry and entry.get('closed'):
+            report.skipped.append(f"{label} (you completed or deleted it)")
             return
 
-        if self.project_id is None:
-            self.project_id = self.get_project_id(PROJECT_NAME)
-        if self.section_id is None:
-            self.section_id = self.get_section_id(self.project_id, SECTION_NAME)
-
-        tasks_log = self.read_task_log()
-        task_log_names = [task['task_name'] for task in tasks_log]
-
-        if task_name not in task_log_names:
-            try:
-                task = self.api.add_task(
-                    content=task_name,
-                    due_date=due_date,  # Pass datetime object, not string
-                    labels=[course_name],
-                    priority=2,
-                    project_id=self.project_id,
-                    section_id=self.section_id
-                )
-                print(f"Task added to Todoist in {PROJECT_NAME} project under {SECTION_NAME} section: {task.content}")
-
-                tasks_log.append({
-                    'task_name': task_name,
-                    'course_name': course_name,
-                    'created_at': datetime.datetime.now().isoformat(),
-                    'due_date': due_date_string
-                })
-                self.write_task_log(tasks_log)
-            except Exception as e:
-                print(f"An error occurred while adding the task: {e}")
-                import traceback
-                traceback.print_exc()
-        else:
-            print(f"Task '{task_name}' already exists in Todoist. No new task created.")
-
-    def clean_task_log(self):
-        tasks_log = self.read_task_log()
-        current_time = datetime.datetime.now()
-        filtered_log = [task for task in tasks_log if datetime.datetime.strptime(task['due_date'], '%Y-%m-%dT%H:%M:%S') > current_time]
-
-        if len(filtered_log) != len(tasks_log):
-            self.write_task_log(filtered_log)
-            print("Cleaned up tasks from log file with due dates in the past.")
-
-    def sync_tasks(self):
-        self.clean_task_log()
-        for task_name, (course_name, due_datetime) in self.tasks.items():
-            # Handle both string and datetime objects
-            if isinstance(due_datetime, datetime.datetime):
-                due_date_string = due_datetime.strftime('%Y-%m-%dT%H:%M:%S')
+        if entry is None:
+            if assignment.due <= now:
+                report.skipped.append(f"{label} (already past due)")
+                return
+            existing = self.find_existing(assignment)
+            if existing:
+                state[assignment.key] = self.entry(existing.id, assignment, due=None)
+                entry = state[assignment.key]
+                log.info("Adopted existing Todoist task for %s", label)
             else:
-                due_date_string = due_datetime
-            self.add_task(task_name, course_name, due_date_string)
+                task_id = self.create(assignment)
+                state[assignment.key] = self.entry(task_id, assignment)
+                report.created.append(f"{label} — due {assignment.due_text}")
+                return
 
-if __name__ == '__main__':
-    tasks = {
-        'Homework Quiz #10': ('MA17500-02', datetime.datetime(2024, 4, 2, 13, 0)),
-        'Quiz 21': ('MA16600-03', datetime.datetime(2024, 4, 2, 23, 59)),
-        # Add other tasks as needed
-    }
+        previous_due = datetime.datetime.fromisoformat(entry['due']) if entry.get('due') else None
+        if previous_due == assignment.due:
+            report.unchanged.append(label)
+            return
 
-    # Initialize and authenticate Todoist
-    todoist_tasks = TodoistTasks(tasks)
-    todoist_tasks.sync_tasks()
+        task = self.get_task(entry['task_id'])
+        if task is None or task.is_completed:
+            entry['closed'] = True
+            report.skipped.append(f"{label} (you completed or deleted it)")
+            return
+        self.update(task, assignment)
+        entry['due'] = assignment.due.isoformat()
+        if previous_due:
+            report.updated.append(f"{label} — due date moved to {assignment.due_text}")
+        else:
+            report.updated.append(f"{label} — refreshed details")
+
+    @staticmethod
+    def entry(task_id, assignment, due='from-assignment'):
+        return {
+            'task_id': task_id,
+            'name': assignment.name,
+            'course': assignment.course_code,
+            'due': assignment.due.isoformat() if due == 'from-assignment' else due,
+            'closed': False,
+            'synced_at': datetime.datetime.now().astimezone().isoformat(timespec='seconds'),
+        }
+
+    def sync_tasks(self, assignments):
+        report = SyncReport(target='Todoist')
+        now = datetime.datetime.now().astimezone()
+        self.resolve_destination()
+        self.ensure_labels(assignments.values())
+
+        state = self.read_state()
+        for assignment in sorted(assignments.values(), key=lambda a: a.due):
+            try:
+                self.sync_one(assignment, state, report, now)
+            except Exception as e:
+                log.exception("Failed to sync %s", assignment.key)
+                report.errors.append(f"{assignment.name} [{assignment.course_code}]: {e}")
+
+        # Forget tasks well past their due date so the state file doesn't grow forever
+        for key, entry in list(state.items()):
+            if entry.get('due') and datetime.datetime.fromisoformat(entry['due']) < now - KEEP_CLOSED_FOR:
+                del state[key]
+        self.write_state(state)
+
+        for entry in state.values():
+            if entry.get('closed') or not entry.get('due'):
+                continue
+            due = datetime.datetime.fromisoformat(entry['due'])
+            still_open = entry['task_id'] in self.open_tasks or entry['task_id'] in self.created_ids
+            if still_open and now < due <= now + DUE_SOON:
+                report.due_soon.append((entry['name'], due))
+        report.due_soon.sort(key=lambda item: item[1])
+        return report

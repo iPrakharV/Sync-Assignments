@@ -49,21 +49,44 @@
 
 ### Setup
 
-1. Place your `client_secret.json` in the root directory.
+1. Place your `client_secret.json` in the `Google/` folder.
+2. Put your Todoist API token in `Todoist/Token.json` as `{"API_Token": "..."}`.
+3. Copy `config.example.json` to `config.json` and fill it in:
+   - `senders`: the address(es) your Brightspace summaries come from (e.g. your school email, if you forward them to Gmail).
+   - `todoist.project` / `todoist.section`: where tasks go.
+   - `todoist.course_labels`: rename course labels, e.g. `{"CS 36400": "Databases"}`. Courses not listed get labels like `CS36400`.
+   - `todoist.label_colors`: optional colors for any label (Todoist color names like `blue`, `red`, `grape`).
+   - `notifications`: `always`, `changes`, `errors` or `never`.
+
+`config.json`, tokens and state files are gitignored.
 
 ### Usage
 
-Run the Sync Assignments tool:
 ```bash
-python3 Main.py
+.venv/bin/python Main.py              # sync now (first run opens a browser to sign in to Google)
+.venv/bin/python Main.py --dry-run    # show what would change, touch nothing
+.venv/bin/python Main.py --lookback 14
 ```
-Authenticate with Google on first run and follow prompts to sync assignments.
+
+### Run it automatically (macOS)
+
+```bash
+scripts/install_schedule.sh          # runs daily at 8:00 and 20:00
+scripts/install_schedule.sh 7 13 21  # custom hours
+scripts/install_schedule.sh --remove
+```
+
+If the Mac is asleep at a scheduled time, the job runs when it wakes. Scheduled runs never open a browser: if Google needs you to sign in again, you get a notification telling you to run `Main.py` by hand once. Logs are in `logs/sync.log`.
 
 ## 🛠️ How It Works
 
-- **GmailReader**: Scans Gmail for Brightspace assignment emails, extracting key information.
-- **GCalendarTasks & TodoistTasks**: Syncs the extracted assignment information with Google Calendar, Google Tasks, and Todoist, ensuring your academic schedule is always up-to-date across your preferred task management platforms.
-- **Main**: Orchestrates the flow from email parsing to calendar and task synchronization with both Google and Todoist services.
+- **GmailReader**: Finds Brightspace "Activity summary" emails from the last few days and parses every item with a due date: name, course, category (Quiz, Assignment...), due time with timezone, and the Brightspace links. Grades and content updates are ignored. When an assignment appears in several emails, the newest one wins.
+- **TodoistTasks**: Creates a task per assignment with a course label, a type label (`exam`, `quiz`, `assignment`), the exact due time, and a description with links back to Brightspace. Each assignment is tracked by course + name and its Todoist task ID (`Todoist/todoist_state.json`), so:
+  - if a professor moves a due date, the existing task is updated instead of duplicated;
+  - tasks you complete or delete are never re-created;
+  - two courses can both have a "Quiz 1".
+- **Summary**: After each run you get a macOS notification like "Todoist: 2 new, 1 updated · Due soon: Exam 2 (tomorrow 11:59 PM)".
+- **GCalendarTasks**: Optional Google Tasks sync (`google_tasks.enabled` in config).
 
 ## 📄 License
 

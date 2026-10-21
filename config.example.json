@@ -1,0 +1,24 @@
+{
+  "senders": ["you@pfw.edu", "d2lsupport@purdue.brightspace.com"],
+  "lookback_days": 3,
+  "timezone": "America/New_York",
+  "notifications": "always",
+
+  "todoist": {
+    "enabled": true,
+    "project": "Inbox",
+    "section": null,
+    "priority": 2,
+    "type_labels": true,
+    "course_labels": {
+      "CS 36400": "Databases"
+    },
+    "label_colors": {
+      "Databases": "blue"
+    }
+  },
+
+  "google_tasks": {
+    "enabled": false
+  }
+}
