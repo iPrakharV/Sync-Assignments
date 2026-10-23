@@ -5,6 +5,8 @@ import json
 import logging
 import datetime
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from todoist_api_python.api import TodoistAPI
 
 from Summary import SyncReport
@@ -21,13 +23,24 @@ def flatten(paginator):
     return [item for page in paginator for item in page]
 
 
+def retrying_session():
+    """Retries dropped connections and Todoist 429/5xx responses, waiting 0s, 4s, 8s, 16s between tries.
+    POSTs are retried too: the SDK sends the same X-Request-ID on each try, which Todoist uses to
+    ignore duplicates, so a retried add_task can't create the task twice."""
+    retry = Retry(total=4, backoff_factor=2, status_forcelist=(429, 500, 502, 503, 504),
+                  allowed_methods=None, respect_retry_after_header=True, raise_on_status=False)
+    session = requests.Session()
+    session.mount('https://', HTTPAdapter(max_retries=retry))
+    return session
+
+
 class TodoistTasks:
     def __init__(self, settings, dry_run=False, state_file='todoist_state.json'):
         self.settings = settings
         self.dry_run = dry_run
         self.path = os.path.dirname(os.path.abspath(__file__))
         self.state_path = os.path.join(self.path, state_file)
-        self.api = TodoistAPI(self.get_api_token())
+        self.api = TodoistAPI(self.get_api_token(), session=retrying_session())
         self.project_id = None
         self.section_id = None
         self.open_tasks = {}  # task_id -> Task, open tasks in the target project/section
