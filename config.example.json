@@ -9,6 +9,7 @@
     "project": "Inbox",
     "section": null,
     "priority": 2,
+    "assign_to_me": true,
     "type_labels": true,
     "course_labels": {
       "CS 36400": "Databases"

@@ -15,6 +15,7 @@ DEFAULTS = {
         'project': 'Inbox',
         'section': None,
         'priority': 2,
+        'assign_to_me': True,  # only takes effect in shared projects
         'type_labels': True,
         'course_labels': {},
         'label_colors': {},

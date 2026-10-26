@@ -54,6 +54,7 @@
 3. Copy `config.example.json` to `config.json` and fill it in:
    - `senders`: the address(es) your Brightspace summaries come from (e.g. your school email, if you forward them to Gmail).
    - `todoist.project` / `todoist.section`: where tasks go.
+   - `todoist.assign_to_me`: in a shared project, assign synced tasks to you (once; later reassignments are kept).
    - `todoist.course_labels`: rename course labels, e.g. `{"CS 36400": "Databases"}`. Courses not listed get labels like `CS36400`.
    - `todoist.label_colors`: optional colors for any label (Todoist color names like `blue`, `red`, `grape`).
    - `notifications`: `always`, `changes`, `errors` or `never`.

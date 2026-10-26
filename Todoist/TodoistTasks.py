@@ -15,6 +15,7 @@ log = logging.getLogger(__name__)
 
 COURSE_COLORS = ['blue', 'green', 'violet', 'teal', 'magenta', 'lime_green', 'grape', 'salmon', 'mint_green', 'lavender']
 KIND_COLORS = {'exam': 'red', 'quiz': 'orange', 'assignment': 'sky_blue'}
+USER_URL = 'https://api.todoist.com/api/v1/user'
 KEEP_CLOSED_FOR = datetime.timedelta(days=14)
 DUE_SOON = datetime.timedelta(hours=48)
 
@@ -40,9 +41,12 @@ class TodoistTasks:
         self.dry_run = dry_run
         self.path = os.path.dirname(os.path.abspath(__file__))
         self.state_path = os.path.join(self.path, state_file)
-        self.api = TodoistAPI(self.get_api_token(), session=retrying_session())
+        self.token = self.get_api_token()
+        self.session = retrying_session()
+        self.api = TodoistAPI(self.token, session=self.session)
         self.project_id = None
         self.section_id = None
+        self.assignee_id = None  # your user ID, when tasks should be assigned to you
         self.open_tasks = {}  # task_id -> Task, open tasks in the target project/section
         self.created_ids = set()
 
@@ -72,6 +76,9 @@ class TodoistTasks:
         if not project:
             raise RuntimeError(f"Todoist project '{project_name}' not found.")
         self.project_id = project.id
+        # Todoist only allows assignees in shared projects
+        if self.settings.get('assign_to_me') and project.is_shared:
+            self.assignee_id = self.get_user_id()
         if section_name:
             section = next((s for s in flatten(self.api.get_sections(project_id=project.id))
                             if s.name == section_name), None)
@@ -81,6 +88,11 @@ class TodoistTasks:
 
         tasks = flatten(self.api.get_tasks(project_id=self.project_id, section_id=self.section_id))
         self.open_tasks = {task.id: task for task in tasks}
+
+    def get_user_id(self):
+        response = self.session.get(USER_URL, headers={'Authorization': f'Bearer {self.token}'}, timeout=60)
+        response.raise_for_status()
+        return str(response.json()['id'])
 
     def labels_for(self, assignment):
         course_label = self.settings['course_labels'].get(
@@ -141,6 +153,7 @@ class TodoistTasks:
             project_id=self.project_id,
             section_id=self.section_id,
             due_datetime=assignment.due,
+            assignee_id=self.assignee_id,
         )
         self.created_ids.add(task.id)
         return task.id
@@ -203,6 +216,23 @@ class TodoistTasks:
             'synced_at': datetime.datetime.now().astimezone().isoformat(timespec='seconds'),
         }
 
+    def assign_to_me(self, state, report):
+        """Assigns each synced task to you once. Tasks created this run already are; older ones and
+        adopted ones get assigned here if nobody is assigned. Later reassignments are left alone."""
+        if not self.assignee_id:
+            return
+        for entry in state.values():
+            if entry.get('assigned') or entry.get('closed'):
+                continue
+            task = self.open_tasks.get(entry['task_id'])
+            if entry['task_id'] in self.created_ids or (task and task.assignee_id):
+                entry['assigned'] = True
+            elif task:
+                if not self.dry_run:
+                    self.api.update_task(task.id, assignee_id=self.assignee_id)
+                entry['assigned'] = True
+                report.updated.append(f"{entry['name']} [{entry['course']}] — assigned to you")
+
     def sync_tasks(self, assignments):
         report = SyncReport(target='Todoist')
         now = datetime.datetime.now().astimezone()
@@ -216,6 +246,11 @@ class TodoistTasks:
             except Exception as e:
                 log.exception("Failed to sync %s", assignment.key)
                 report.errors.append(f"{assignment.name} [{assignment.course_code}]: {e}")
+        try:
+            self.assign_to_me(state, report)
+        except Exception as e:
+            log.exception("Failed to assign tasks")
+            report.errors.append(f"Assigning tasks to you: {e}")
 
         # Forget tasks well past their due date so the state file doesn't grow forever
         for key, entry in list(state.items()):
