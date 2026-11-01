@@ -1,5 +1,6 @@
 {
   "senders": ["you@pfw.edu", "d2lsupport@purdue.brightspace.com"],
+  "gmail_auth": "app_password",
   "lookback_days": 3,
   "timezone": "America/New_York",
   "notifications": "always",

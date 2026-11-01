@@ -49,7 +49,10 @@
 
 ### Setup
 
-1. Place your `client_secret.json` in the `Google/` folder.
+1. Connect Gmail with an app password (no Google Cloud project needed, and it doesn't expire):
+   - Turn on 2-Step Verification for your Google account, then create an app password at https://myaccount.google.com/apppasswords.
+   - Run `.venv/bin/python scripts/setup_app_password.py` and paste it in. It checks the password with Gmail and saves it to `Google/AppPassword.json`.
+   - Alternatively, set `"gmail_auth": "oauth"` and place an OAuth `client_secret.json` in `Google/` (a Google Cloud project in "Testing" mode makes you sign in again every 7 days).
 2. Put your Todoist API token in `Todoist/Token.json` as `{"API_Token": "..."}`.
 3. Copy `config.example.json` to `config.json` and fill it in:
    - `senders`: the address(es) your Brightspace summaries come from (e.g. your school email, if you forward them to Gmail).
@@ -77,11 +80,11 @@ scripts/install_schedule.sh 7 13 21  # custom hours
 scripts/install_schedule.sh --remove
 ```
 
-If the Mac is asleep at a scheduled time, the job runs when it wakes. Scheduled runs never open a browser: if Google needs you to sign in again, you get a notification telling you to run `Main.py` by hand once. Logs are in `logs/sync.log`.
+If the Mac is asleep at a scheduled time, the job runs when it wakes. If Gmail rejects the app password (e.g. you revoked it) you get a notification telling you to run the setup script again. Logs are in `logs/sync.log`.
 
 ## 🛠️ How It Works
 
-- **GmailReader**: Finds Brightspace "Activity summary" emails from the last few days and parses every item with a due date: name, course, category (Quiz, Assignment...), due time with timezone, and the Brightspace links. Grades and content updates are ignored. When an assignment appears in several emails, the newest one wins.
+- **ImapGmailReader / GmailReader**: Reads Gmail over IMAP (app password) or the Gmail API (OAuth). Finds Brightspace "Activity summary" emails from the last few days and parses every item with a due date: name, course, category (Quiz, Assignment...), due time with timezone, and the Brightspace links. Grades and content updates are ignored. When an assignment appears in several emails, the newest one wins.
 - **TodoistTasks**: Creates a task per assignment with a course label, a type label (`exam`, `quiz`, `assignment`), the exact due time, and a description with links back to Brightspace. Each assignment is tracked by course + name and its Todoist task ID (`Todoist/todoist_state.json`), so:
   - if a professor moves a due date, the existing task is updated instead of duplicated;
   - tasks you complete or delete are never re-created;

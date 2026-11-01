@@ -2,6 +2,7 @@ import os
 import sys
 import time
 import socket
+import imaplib
 import logging
 import argparse
 import warnings
@@ -17,13 +18,14 @@ from googleapiclient.errors import HttpError
 from Config import ROOT, load_config
 from Google.Auth import AuthRequiredError
 from Google.GmailReader import GmailReader
+from Google.ImapGmailReader import ImapGmailReader
 from Google.GCalendarTasks import GCalendarTasks
 from Todoist.TodoistTasks import TodoistTasks
 from Summary import notify, notification_text
 
 log = logging.getLogger('sync')
 
-REQUIRED_HOSTS = ('oauth2.googleapis.com', 'gmail.googleapis.com', 'api.todoist.com')
+REQUIRED_HOSTS = ('imap.gmail.com', 'api.todoist.com')
 NETWORK_WAIT = 180      # seconds a scheduled run waits for Wi-Fi after the Mac wakes
 RUN_RETRY_DELAYS = (60, 300)  # waits before re-running a scheduled sync that hit a temporary error
 
@@ -66,6 +68,9 @@ def is_temporary(error):
     """Network drops and server-side hiccups, as opposed to bugs or sign-in problems."""
     if isinstance(error, (requests.ConnectionError, requests.Timeout, TransportError)):
         return True
+    # IMAP drops and DNS/connection failures (deliberately not all OSErrors: a missing file isn't temporary)
+    if isinstance(error, (imaplib.IMAP4.abort, socket.gaierror, socket.timeout, ConnectionError, TimeoutError)):
+        return True
     if isinstance(error, requests.HTTPError) and error.response is not None:
         return error.response.status_code == 429 or error.response.status_code >= 500
     if isinstance(error, HttpError):
@@ -84,7 +89,10 @@ def should_notify(setting, reports, failed):
 
 
 def run(args, config):
-    reader = GmailReader(timezone=config['timezone'])
+    if config['gmail_auth'] == 'oauth':
+        reader = GmailReader(timezone=config['timezone'])
+    else:
+        reader = ImapGmailReader(timezone=config['timezone'])
     reader.authenticate(interactive=not args.scheduled)
     assignments = reader.read_assignments(config['senders'], args.lookback or config['lookback_days'])
 

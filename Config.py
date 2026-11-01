@@ -7,6 +7,7 @@ CONFIG_PATH = os.path.join(ROOT, 'config.json')
 
 DEFAULTS = {
     'senders': ['d2lsupport@purdue.brightspace.com'],
+    'gmail_auth': 'app_password',  # app_password (IMAP, never expires) | oauth (Google Cloud project)
     'lookback_days': 3,
     'timezone': 'America/New_York',
     'notifications': 'always',  # always | changes | errors | never
